@@ -2,7 +2,8 @@
   "private": true,
   "name": "zotrems",
   "version": "0.1.2",
-  "license": "MIT",
+  "license": "EUPL-1.2",
+  "author": "Zuri Nimca Klaschka",
   "scripts": {
     "check-types": "tsc",
     "dev": "node scripts/build.mjs dev",

@@ -93,3 +93,9 @@ Zotrems was developed with the help of [Claude](https://claude.com/claude-code),
 AI model, which wrote most of the code. I'm an experienced software engineer: the concept and
 the design decisions are mine, I direct and review the work, and I take responsibility for
 what is published here. If something doesn't work, please open an issue.
+
+## License
+
+Copyright © 2026 Zuri Nimca Klaschka
+
+Zotrems is licensed under the [European Union Public Licence 1.2](LICENSE) (EUPL-1.2).
