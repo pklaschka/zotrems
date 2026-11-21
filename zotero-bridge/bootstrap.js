@@ -101,6 +101,44 @@ async function postJSON(url, payload) {
   return body ? JSON.parse(body) : null;
 }
 
+// Zotero raises its citation dialog with a Carbon call that no longer brings
+// the app to the front when another app is active, so do it ourselves.
+async function bringToFront() {
+  try {
+    if (Zotero.isMac) {
+      // <bundle>/Contents/MacOS/zotero -> <bundle>; LaunchServices activates
+      // the running app without needing any Automation permission.
+      const bundle = Services.dirsvc.get('XREExeF', Ci.nsIFile).parent.parent.parent.path;
+      await Zotero.Utilities.Internal.exec('/usr/bin/open', ['-a', bundle]);
+    }
+    else {
+      Zotero.Utilities.Internal.activate();
+    }
+  }
+  catch (err) {
+    Zotero.logError(err);
+    Zotero.Utilities.Internal.activate();
+  }
+}
+
+// Waits for the citation dialog to appear, then raises and focuses it.
+async function raiseCitationDialog(previousWindow, isDone) {
+  for (let i = 0; i < 100 && !isDone(); i++) {
+    const win = Zotero.Integration.currentWindow;
+    if (win && win !== previousWindow && !win.closed) {
+      await bringToFront();
+      try {
+        win.focus();
+      }
+      catch (err) {
+        Zotero.logError(err);
+      }
+      return;
+    }
+    await Zotero.Promise.delay(100);
+  }
+}
+
 async function pickCitation(locale) {
   const docId = `zotrems-${Zotero.Utilities.randomString(12)}`;
   const base = `http://127.0.0.1:${Zotero.Prefs.get('httpServer.port')}/connector/document`;
@@ -160,6 +198,17 @@ async function pickCitation(locale) {
     }
   };
 
+  let done = false;
+  raiseCitationDialog(Zotero.Integration.currentWindow, () => done);
+
+  try {
+    return await runIntegration();
+  }
+  finally {
+    done = true;
+  }
+
+  async function runIntegration() {
   let request = await postJSON(`${base}/execCommand`, { command: 'addEditCitation', docId });
   for (;;) {
     if (!request || typeof request !== 'object' || !request.command) {
@@ -202,6 +251,7 @@ async function pickCitation(locale) {
     }
   }
   return cites;
+  }
 }
 
 // ---------------------------------------------------------------- formatting
@@ -338,7 +388,13 @@ function registerEndpoints() {
 
   Zotero.Server.Endpoints['/zotrems/pick'] = endpoint(['GET'], async (request) => {
     if (!tokenOK(request.searchParams.get('token'))) return reply(403, { error: 'unauthorized' });
-    if (pickInProgress) return reply(409, { error: 'busy' });
+    if (pickInProgress) {
+      // Help the user find the dialog that is already open.
+      await bringToFront();
+      const win = Zotero.Integration.currentWindow;
+      if (win && !win.closed) win.focus();
+      return reply(409, { error: 'busy' });
+    }
     pickInProgress = true;
     try {
       const cites = await pickCitation(request.searchParams.get('locale') || defaultLocale());
