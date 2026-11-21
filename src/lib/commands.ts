@@ -1,13 +1,20 @@
 import type { RNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
 import { Bridge, BridgeError } from './bridge';
-import { findDocument, getOrCreateDocument, loadEntries, syncEntries } from './bibliography';
+import {
+  findDocument,
+  getOrCreateDocument,
+  loadEntries,
+  removeEmptyRems,
+  syncEntries,
+} from './bibliography';
+import { t } from './i18n';
 
 let busy = false;
 
 /** Runs a command exclusively and turns errors into toasts. */
 async function run(plugin: RNPlugin, fn: () => Promise<void>): Promise<void> {
   if (busy) {
-    await plugin.app.toast('Zotrems arbeitet noch …');
+    await plugin.app.toast(t('toast.busy'));
     return;
   }
   busy = true;
@@ -32,7 +39,7 @@ export function insertCitation(plugin: RNPlugin): Promise<void> {
   return run(plugin, async () => {
     const target = await plugin.focus.getFocusedRem();
     if (!target) {
-      await plugin.app.toast('Bitte zuerst den Cursor an die Stelle setzen, an der zitiert werden soll.');
+      await plugin.app.toast(t('toast.noFocus'));
       return;
     }
 
@@ -67,7 +74,7 @@ export function insertCitation(plugin: RNPlugin): Promise<void> {
       if (cite.suffix) citation.push(joinSuffix(cite.suffix));
     }
     if (first) {
-      await plugin.app.toast('Die ausgewählten Einträge konnten nicht zitiert werden.');
+      await plugin.app.toast(t('toast.nothingCited'));
       return;
     }
     citation.push(')');
@@ -79,7 +86,7 @@ export function insertCitation(plugin: RNPlugin): Promise<void> {
       await plugin.editor.insertRichText(citation);
     } else {
       const current = await plugin.rem.findOne(target._id);
-      if (!current) throw new Error('Das Rem, in das zitiert werden sollte, existiert nicht mehr.');
+      if (!current) throw new Error(t('error.targetGone'));
       const text = current.text || [];
       await current.setText([...text, ...(text.length ? [' '] : []), ...citation]);
     }
@@ -89,9 +96,12 @@ export function insertCitation(plugin: RNPlugin): Promise<void> {
 export function refreshBibliography(plugin: RNPlugin): Promise<void> {
   return run(plugin, async () => {
     const doc = await findDocument(plugin);
+    const empty = doc ? await removeEmptyRems(doc) : 0;
     const existing = doc ? await loadEntries(plugin, doc) : [];
     if (!doc || !existing.length) {
-      await plugin.app.toast('Das Literaturverzeichnis ist noch leer.');
+      await plugin.app.toast(
+        empty ? t('toast.onlyEmptyRemoved', { count: empty }) : t('toast.bibliographyEmpty')
+      );
       return;
     }
 
@@ -107,18 +117,25 @@ export function refreshBibliography(plugin: RNPlugin): Promise<void> {
       for (const entry of unused) await entry.rem.remove();
     }
 
-    const parts = [`${existing.length} Einträge geprüft`, `${updated} aktualisiert`];
+    const parts = [
+      t('refresh.checked', { count: existing.length }),
+      t('refresh.updated', { count: updated }),
+    ];
     if (unused.length) {
-      parts.push(removeUnused ? `${unused.length} unbenutzte entfernt` : `${unused.length} ohne Verweis`);
+      parts.push(
+        t(removeUnused ? 'refresh.unusedRemoved' : 'refresh.unused', { count: unused.length })
+      );
     }
-    if (formatted.missing.length) parts.push(`${formatted.missing.length} nicht mehr in Zotero`);
-    await plugin.app.toast(`Literaturverzeichnis: ${parts.join(', ')}.`);
+    if (empty) parts.push(t('refresh.emptyRemoved', { count: empty }));
+    if (formatted.missing.length)
+      parts.push(t('refresh.missing', { count: formatted.missing.length }));
+    await plugin.app.toast(t('toast.refreshed', { parts: parts.join(', ') }));
   });
 }
 
 export function connect(plugin: RNPlugin): Promise<void> {
   return run(plugin, async () => {
     await new Bridge(plugin).pair();
-    await plugin.app.toast('Mit Zotero verbunden.');
+    await plugin.app.toast(t('toast.connected'));
   });
 }

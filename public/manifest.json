@@ -1,17 +1,17 @@
 {
   "manifestVersion": 1,
   "id": "zotrems",
-  "name": "Zotrems – Zotero-Zitate",
+  "name": "Zotrems – Zotero Citations",
   "author": "zklaschka",
   "repoUrl": "https://github.com/pklaschka/zotrems",
   "version": {
     "major": 0,
     "minor": 1,
-    "patch": 0
+    "patch": 1
   },
   "theme": [],
   "enableOnMobile": false,
-  "description": "Zitate über den nativen Zotero-Dialog einfügen; die Quellen landen als Concepts in einem Literaturverzeichnis-Dokument.",
+  "description": "Insert citations with Zotero's native citation dialog; cited sources are kept as concepts in a bibliography document.",
   "requestNative": false,
   "requiredScopes": [
     {

@@ -6,6 +6,7 @@ import {
   type RichTextInterface,
 } from '@remnote/plugin-sdk';
 import type { FormattedItem } from './bridge';
+import { DEFAULT_DOCUMENT_NAMES, t } from './i18n';
 
 // The bibliography document holds one concept per Zotero item:
 //
@@ -15,7 +16,6 @@ import type { FormattedItem } from './bridge';
 // The deep link in the child is what ties a Rem to its Zotero item.
 
 const ZOTERO_URI = /zotero:\/\/select\/(?:library|groups\/\d+)\/items\/[A-Z0-9]+/;
-const LINK_LABEL = 'In Zotero öffnen';
 
 export interface Entry {
   rem: PluginRem;
@@ -24,18 +24,24 @@ export interface Entry {
 
 export async function documentName(plugin: RNPlugin): Promise<string> {
   const name = ((await plugin.settings.getSetting<string>('document')) || '').trim();
-  return name || 'Zotero-Literaturverzeichnis';
+  return name || t('setting.document.default');
 }
 
 export async function findDocument(plugin: RNPlugin): Promise<PluginRem | undefined> {
-  return plugin.rem.findByName([await documentName(plugin)], null);
+  // Also look for the other languages' default names, so that switching the
+  // interface language does not start a second bibliography.
+  for (const name of new Set([await documentName(plugin), ...DEFAULT_DOCUMENT_NAMES])) {
+    const doc = await plugin.rem.findByName([name], null);
+    if (doc) return doc;
+  }
+  return undefined;
 }
 
 export async function getOrCreateDocument(plugin: RNPlugin): Promise<PluginRem> {
   const existing = await findDocument(plugin);
   if (existing) return existing;
   const doc = await plugin.rem.createRem();
-  if (!doc) throw new Error('Das Literaturverzeichnis konnte nicht angelegt werden.');
+  if (!doc) throw new Error(t('error.createDocument'));
   await doc.setText([await documentName(plugin)]);
   await doc.setIsDocument(true);
   return doc;
@@ -62,7 +68,8 @@ async function findURIInRem(plugin: RNPlugin, rem: PluginRem): Promise<string | 
 
   // Inline links point at a separate link Rem.
   for (const element of text) {
-    const linkId = typeof element === 'object' && 'qId' in element ? (element as any).qId : undefined;
+    const linkId =
+      typeof element === 'object' && 'qId' in element ? (element as any).qId : undefined;
     if (!linkId) continue;
     const linkRem = await plugin.rem.findOne(linkId);
     if (!linkRem) continue;
@@ -119,7 +126,9 @@ export function htmlToRichText(html: string): RichTextInterface {
     const tag = element.tagName.toLowerCase();
     const style = element.getAttribute('style') || '';
     // citeproc un-italicises nested titles with font-style:normal
-    const nextItalic = /font-style:\s*normal/.test(style) ? false : italic || tag === 'i' || tag === 'em';
+    const nextItalic = /font-style:\s*normal/.test(style)
+      ? false
+      : italic || tag === 'i' || tag === 'em';
     const nextBold = bold || tag === 'b' || tag === 'strong';
     element.childNodes.forEach((child) => walk(child, nextItalic, nextBold));
   };
@@ -133,12 +142,12 @@ async function plain(plugin: RNPlugin, text: RichTextInterface | undefined): Pro
 
 async function addZoteroLink(plugin: RNPlugin, entry: PluginRem, uri: string): Promise<void> {
   const detail = await plugin.rem.createRem();
-  if (!detail) throw new Error('Der Zotero-Link konnte nicht angelegt werden.');
+  if (!detail) throw new Error(t('error.createLink'));
   await detail.setParent(entry);
 
   let text: RichTextInterface | undefined;
   try {
-    text = await plugin.richText.parseFromMarkdown(`[${LINK_LABEL}](${uri})`);
+    text = await plugin.richText.parseFromMarkdown(`[${t('link.label')}](${uri})`);
   } catch {
     // fall back to the bare URI below
   }
@@ -200,7 +209,7 @@ export async function syncEntries(
   for (const uri of fresh) {
     const item = items[uri];
     const rem = await plugin.rem.createRem();
-    if (!rem) throw new Error('Der Literatureintrag konnte nicht angelegt werden.');
+    if (!rem) throw new Error(t('error.createEntry'));
 
     // Keep the document in APA order: insert before the first entry that sorts later.
     const siblings = (await plugin.rem.findOne(doc._id))?.children || [];
@@ -220,4 +229,22 @@ export async function syncEntries(
   }
 
   return { entries, created, updated };
+}
+
+function isBlank(text: RichTextInterface | undefined): boolean {
+  return !text || text.every((element) => typeof element === 'string' && !element.trim());
+}
+
+/**
+ * Removes Rems without any content (no text, no back text, no children)
+ * anywhere in the bibliography document. Returns how many were removed.
+ */
+export async function removeEmptyRems(doc: PluginRem): Promise<number> {
+  let removed = 0;
+  for (const rem of await doc.getDescendants()) {
+    if (!isBlank(rem.text) || !isBlank(rem.backText) || rem.children?.length) continue;
+    await rem.remove();
+    removed++;
+  }
+  return removed;
 }

@@ -1,4 +1,5 @@
 import type { RNPlugin } from '@remnote/plugin-sdk';
+import { t } from './i18n';
 
 // Client for the Zotrems Bridge plugin running inside Zotero.
 //
@@ -10,7 +11,10 @@ const TOKEN_KEY = 'zotero-bridge-token';
 export type BridgeErrorKind = 'offline' | 'unauthorized' | 'denied' | 'busy' | 'other';
 
 export class BridgeError extends Error {
-  constructor(public kind: BridgeErrorKind, message: string) {
+  constructor(
+    public kind: BridgeErrorKind,
+    message: string
+  ) {
     super(message);
   }
 }
@@ -60,8 +64,10 @@ export class Bridge {
     return `http://127.0.0.1:${port}/zotrems`;
   }
 
+  /** The citation locale to request; '' lets Zotero use its own language. */
   private async locale(): Promise<string> {
-    return ((await this.plugin.settings.getSetting<string>('locale')) || '').trim();
+    const choice = await this.plugin.settings.getSetting<string>('locale');
+    return choice === 'de-DE' || choice === 'en-US' ? choice : '';
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -69,10 +75,7 @@ export class Bridge {
     try {
       response = await fetch(`${await this.base()}${path}`, init);
     } catch {
-      throw new BridgeError(
-        'offline',
-        'Zotero ist nicht erreichbar. Läuft Zotero, und ist das Plugin »Zotrems Bridge« installiert?'
-      );
+      throw new BridgeError('offline', t('error.offline'));
     }
     let body: any = null;
     try {
@@ -82,23 +85,23 @@ export class Bridge {
     }
     if (response.ok && body) return body as T;
     if (response.status === 404 || (response.ok && !body)) {
-      throw new BridgeError(
-        'offline',
-        'Zotero läuft, aber das Plugin »Zotrems Bridge« antwortet nicht. Ist es in Zotero installiert und aktiviert?'
-      );
+      throw new BridgeError('offline', t('error.noBridge'));
     }
     const code = body?.error;
-    if (code === 'unauthorized') throw new BridgeError('unauthorized', 'Zotero hat den Zugriff abgelehnt.');
-    if (code === 'denied') throw new BridgeError('denied', 'Die Verbindung wurde in Zotero abgelehnt.');
+    if (code === 'unauthorized') throw new BridgeError('unauthorized', t('error.unauthorized'));
+    if (code === 'denied') throw new BridgeError('denied', t('error.denied'));
     if (code === 'busy') {
-      throw new BridgeError('busy', 'In Zotero ist bereits ein Zitierdialog geöffnet.');
+      throw new BridgeError('busy', t('error.pickerOpen'));
     }
-    throw new BridgeError('other', `Zotero-Fehler: ${body?.message || `HTTP ${response.status}`}`);
+    throw new BridgeError(
+      'other',
+      t('error.zotero', { message: body?.message || `HTTP ${response.status}` })
+    );
   }
 
   /** Asks the user inside Zotero for permission and stores the resulting token. */
   async pair(): Promise<string> {
-    await this.plugin.app.toast('Bitte die Verbindung in Zotero bestätigen …');
+    await this.plugin.app.toast(t('toast.confirmInZotero'));
     const { token } = await this.request<{ token: string }>('/pair');
     await this.plugin.storage.setLocal(TOKEN_KEY, token);
     return token;

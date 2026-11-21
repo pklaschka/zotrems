@@ -1,41 +1,61 @@
 import { declareIndexPlugin, type ReactRNPlugin } from '@remnote/plugin-sdk';
 import { connect, insertCitation, refreshBibliography } from '../lib/commands';
+import { setLanguage, t } from '../lib/i18n';
 
 async function onActivate(plugin: ReactRNPlugin) {
-  await plugin.settings.registerStringSetting({
-    id: 'document',
-    title: 'Name des Literaturverzeichnis-Dokuments',
-    defaultValue: 'Zotero-Literaturverzeichnis',
+  // Registered first and in both languages: everything below depends on it.
+  await plugin.settings.registerDropdownSetting({
+    id: 'language',
+    title: 'Sprache / Language',
+    description:
+      'Sprache der Plugin-Oberfläche; wirkt nach dem Neuladen des Plugins. / Language of the plugin interface; takes effect after reloading the plugin.',
+    defaultValue: 'auto',
+    options: [
+      { key: 'auto', label: 'Automatisch / Automatic', value: 'auto' },
+      { key: 'de', label: 'Deutsch', value: 'de' },
+      { key: 'en', label: 'English', value: 'en' },
+    ],
   });
+  setLanguage(await plugin.settings.getSetting<string>('language'));
 
   await plugin.settings.registerStringSetting({
+    id: 'document',
+    title: t('setting.document.title'),
+    defaultValue: t('setting.document.default'),
+  });
+
+  await plugin.settings.registerDropdownSetting({
     id: 'locale',
-    title: 'Sprache der Zitate',
-    description:
-      'Bestimmt z. B. »S.« statt »p.« und »&« statt »und«. Leer lassen, um die Zotero-Einstellung zu verwenden.',
-    defaultValue: 'de-DE',
+    title: t('setting.locale.title'),
+    description: t('setting.locale.description'),
+    defaultValue: 'zotero',
+    options: [
+      { key: 'zotero', label: t('setting.locale.zotero'), value: 'zotero' },
+      { key: 'de', label: t('setting.locale.de'), value: 'de-DE' },
+      { key: 'en', label: t('setting.locale.en'), value: 'en-US' },
+    ],
   });
 
   await plugin.settings.registerBooleanSetting({
     id: 'remove-unused',
-    title: 'Unbenutzte Einträge beim Aktualisieren entfernen',
-    description:
-      'Löscht beim Aktualisieren des Literaturverzeichnisses alle Einträge, auf die kein Rem mehr verweist.',
+    title: t('setting.removeUnused.title'),
+    description: t('setting.removeUnused.description'),
     defaultValue: false,
   });
 
   await plugin.settings.registerNumberSetting({
     id: 'port',
-    title: 'Zotero-Port',
-    description: 'Nur ändern, wenn der Port in Zotero umgestellt wurde.',
+    title: t('setting.port.title'),
+    description: t('setting.port.description'),
     defaultValue: 23119,
   });
 
+  // Keywords cover both languages so the commands are found either way.
   await plugin.app.registerCommand({
     id: 'insert-citation',
-    name: 'Zotero: Zitat einfügen',
-    description: 'Öffnet den Zotero-Zitierdialog und fügt das Zitat an der Cursorposition ein.',
-    keywords: 'zotero zitat zitieren cite citation quelle literatur',
+    name: t('command.insert.name'),
+    description: t('command.insert.description'),
+    keywords: 'zotero zitat zitieren quelle literatur cite citation reference source',
     quickCode: 'zcite',
     keyboardShortcut: 'opt+shift+z',
     action: () => insertCitation(plugin),
@@ -43,17 +63,17 @@ async function onActivate(plugin: ReactRNPlugin) {
 
   await plugin.app.registerCommand({
     id: 'refresh-bibliography',
-    name: 'Zotero: Literaturverzeichnis aktualisieren',
-    description: 'Gleicht alle Einträge des Literaturverzeichnisses mit Zotero ab.',
-    keywords: 'zotero literaturverzeichnis bibliographie aktualisieren refresh',
+    name: t('command.refresh.name'),
+    description: t('command.refresh.description'),
+    keywords: 'zotero literaturverzeichnis bibliographie aktualisieren bibliography refresh update',
     action: () => refreshBibliography(plugin),
   });
 
   await plugin.app.registerCommand({
     id: 'connect',
-    name: 'Zotero: Verbindung herstellen',
-    description: 'Koppelt RemNote (erneut) mit Zotero.',
-    keywords: 'zotero verbinden koppeln pair connect',
+    name: t('command.connect.name'),
+    description: t('command.connect.description'),
+    keywords: 'zotero verbinden koppeln connect pair',
     action: () => connect(plugin),
   });
 }
