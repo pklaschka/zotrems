@@ -24,13 +24,26 @@ environments, so a RemNote plugin cannot talk to Zotero (or Better BibTeX) direc
 
 ## Installation
 
-1. **Zotero** (version 7 or later): run `npm run build:zotero`, then in Zotero choose
-   *Tools → Plugins → gear icon → Install Plugin From File* and select `zotrems-bridge.xpi`.
-2. **RemNote** (needs Node 22 and the `zip` command): run `npm install`, then either
-   - `npm run dev` and enter `http://localhost:8080` in RemNote under *Settings → Plugins →
-     Build → Develop from localhost*, or
-   - `npm run build` and upload `PluginZip.zip`.
+1. **Zotero** (version 7 or later): download `zotrems-bridge.xpi` from the
+   [latest release](https://github.com/pklaschka/zotrems/releases/latest). In Zotero choose
+   *Tools → Plugins → gear icon → Install Plugin From File* and select the file. From then on
+   Zotero keeps the bridge up to date by itself.
+2. **RemNote**: open *Settings → Plugins*, search the plugin store for "Zotrems" and install
+   it. RemNote keeps it up to date.
 3. On the first citation, Zotero asks once whether RemNote may access it.
+
+Both plugins share one version number and are meant to be used in matching versions.
+
+### Building from source
+
+Needs Node 22 and the `zip` command.
+
+- `npm install` once.
+- `npm run build:zotero` writes `zotrems-bridge.xpi`.
+- `npm run build` writes `PluginZip.zip` for RemNote; every GitHub release also carries it as
+  `zotrems-remnote-plugin.zip`.
+- `npm run dev` serves the RemNote plugin for development: enter `http://localhost:8080` in
+  RemNote under *Settings → Plugins → Build → Develop from localhost*.
 
 ## Usage
 
@@ -39,6 +52,12 @@ Zotero has to be running.
 - **Zotero: Insert Citation** – `/zcite`, the Omnibar or `Alt+Shift+Z`. Opens the Zotero
   dialog; page number, prefix, suffix and "Omit Author" are carried over. Several sources
   become one citation: `(Meier et al., 2023; Müller, 2024, p. 12)`.
+  The dialog also offers annotations and notes. Picking **annotations** inserts each quote
+  (and comment) followed by its citation with the page, e.g.
+  `“Spacing works.” (Müller, 2024, p. 5)`. Picking a **note** inserts the note's text, with the
+  citations inside it turned into linked citations. In both cases the first paragraph goes
+  to the cursor and further paragraphs become the Rems that follow; headings, lists, quotes
+  and code keep their formatting. Images cannot be carried over.
 - **Zotero: Refresh Bibliography** – brings all entries in line with Zotero (changed
   metadata, `2024a`/`2024b`), removes empty Rems from the bibliography and reports entries
   without references.
