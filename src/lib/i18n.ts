@@ -27,6 +27,8 @@ const de = {
   'toast.busy': 'Zotrems arbeitet noch …',
   'toast.noFocus': 'Bitte zuerst den Cursor an die Stelle setzen, an der zitiert werden soll.',
   'toast.nothingCited': 'Die ausgewählten Einträge konnten nicht zitiert werden.',
+  'toast.nothingToInsert': 'Die Auswahl enthält keinen Text, der eingefügt werden könnte.',
+  'toast.imagesSkipped': '{count} Bild(er) aus Zotero konnten nicht übernommen werden.',
   'toast.confirmInZotero': 'Bitte die Verbindung in Zotero bestätigen …',
   'toast.connected': 'Mit Zotero verbunden.',
   'toast.bibliographyEmpty': 'Das Literaturverzeichnis ist noch leer.',
@@ -51,6 +53,7 @@ const de = {
   'error.createDocument': 'Das Literaturverzeichnis konnte nicht angelegt werden.',
   'error.createLink': 'Der Zotero-Link konnte nicht angelegt werden.',
   'error.createEntry': 'Der Literatureintrag konnte nicht angelegt werden.',
+  'error.createRem': 'Das Rem für den eingefügten Text konnte nicht angelegt werden.',
   'error.targetGone': 'Das Rem, in das zitiert werden sollte, existiert nicht mehr.',
 };
 
@@ -83,6 +86,8 @@ const en: Record<Key, string> = {
   'toast.busy': 'Zotrems is still working …',
   'toast.noFocus': 'Place the cursor where the citation should go first.',
   'toast.nothingCited': 'The selected items could not be cited.',
+  'toast.nothingToInsert': 'The selection contains no text that could be inserted.',
+  'toast.imagesSkipped': '{count} image(s) from Zotero could not be carried over.',
   'toast.confirmInZotero': 'Please confirm the connection in Zotero …',
   'toast.connected': 'Connected to Zotero.',
   'toast.bibliographyEmpty': 'The bibliography is still empty.',
@@ -106,6 +111,7 @@ const en: Record<Key, string> = {
   'error.createDocument': 'Could not create the bibliography document.',
   'error.createLink': 'Could not create the Zotero link.',
   'error.createEntry': 'Could not create the bibliography entry.',
+  'error.createRem': 'Could not create the Rem for the inserted text.',
   'error.targetGone': 'The Rem the citation was meant for no longer exists.',
 };
 

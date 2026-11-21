@@ -18,6 +18,7 @@
 const PREF_TOKEN = 'extensions.zotrems.token';
 const APA = 'http://www.zotero.org/styles/apa';
 const ITEM_PREFIX = 'ITEM CSL_CITATION ';
+const NOTE_PLACEHOLDER_LINK = 'https://www.zotero.org/?';
 const ENDPOINTS = ['/zotrems/ping', '/zotrems/pair', '/zotrems/pick', '/zotrems/format'];
 
 let bridgeVersion = '';
@@ -139,6 +140,42 @@ async function raiseCitationDialog(previousWindow, isDone) {
   }
 }
 
+// Resolves the citation stored in an integration field to our own citation
+// objects. Items are identified by ID (regular citations) or by URI (the
+// citations Zotero generates for annotations and notes).
+async function citesFromField(field) {
+  const cites = [];
+  if (!field.code.startsWith(ITEM_PREFIX)) return cites;
+  const citation = JSON.parse(field.code.slice(ITEM_PREFIX.length));
+  for (const citationItem of citation.citationItems || []) {
+    let item = null;
+    if (Number.isInteger(citationItem.id)) item = Zotero.Items.get(citationItem.id);
+    if (!item && Array.isArray(citationItem.uris)) {
+      for (const uri of citationItem.uris) {
+        item = await Zotero.URI.getURIItem(uri);
+        if (item) break;
+      }
+    }
+    if (!item || !item.isRegularItem()) continue;
+    cites.push({
+      uri: selectURI(item),
+      locator: citationItem.locator ? String(citationItem.locator) : '',
+      label: typeof citationItem.label === 'string' ? citationItem.label : 'page',
+      prefix: typeof citationItem.prefix === 'string' ? citationItem.prefix : '',
+      suffix: typeof citationItem.suffix === 'string' ? citationItem.suffix : '',
+      suppressAuthor: !!citationItem['suppress-author'],
+    });
+  }
+  return cites;
+}
+
+// Resolves with { cites, note }:
+//
+// - Regular items: `cites` holds the picked citation, `note` is null.
+// - A note or annotations: Zotero inserts their text into the document and
+//   turns the citations inside it into fields. `note.html` is that text, in
+//   which each citation is a link to NOTE_PLACEHOLDER_LINK + <placeholder>,
+//   and `note.citations` maps the placeholders to their citations.
 async function pickCitation(locale) {
   const docId = `zotrems-${Zotero.Utilities.randomString(12)}`;
   const base = `http://127.0.0.1:${Zotero.Prefs.get('httpServer.port')}/connector/document`;
@@ -150,9 +187,11 @@ async function pickCitation(locale) {
     + '</data>';
   let fields = [];
   const inserted = [];
+  const placeholders = new Map(); // field -> placeholder ID
+  let noteHTML = null;
 
-  const newField = (code) => {
-    const field = { id: String(inserted.length), code: code || '', text: '{Placeholder}', noteIndex: 0, adjacent: false };
+  const newField = () => {
+    const field = { id: String(inserted.length), code: '', text: '{Placeholder}', noteIndex: 0, adjacent: false };
     fields.push(field);
     inserted.push(field);
     return field;
@@ -175,12 +214,16 @@ async function pickCitation(locale) {
       case 'Document.cursorInField': return null;
       case 'Document.getDocumentData': return documentData;
       case 'Document.setDocumentData': documentData = String(a[0] || ''); return null;
-      case 'Document.insertField': return newField('');
+      case 'Document.insertField': return newField();
       case 'Document.getFields': return fields;
       case 'Document.convert': return null;
       case 'Document.convertPlaceholdersToFields':
-        return (Array.isArray(a[0]) ? a[0] : []).map((placeholder) => newField(String(placeholder)));
-      case 'Document.insertText': return null;
+        return (Array.isArray(a[0]) ? a[0] : []).map((placeholder) => {
+          const field = newField();
+          placeholders.set(field, String(placeholder));
+          return field;
+        });
+      case 'Document.insertText': noteHTML = (noteHTML || '') + String(a[0] || ''); return null;
       case 'Document.setBibliographyStyle': return null;
       case 'Document.complete': return null;
       case 'Field.delete': {
@@ -200,58 +243,46 @@ async function pickCitation(locale) {
 
   let done = false;
   raiseCitationDialog(Zotero.Integration.currentWindow, () => done);
-
   try {
-    return await runIntegration();
+    let request = await postJSON(`${base}/execCommand`, { command: 'addEditCitation', docId });
+    for (;;) {
+      if (!request || typeof request !== 'object' || !request.command) {
+        throw new Error(`Unexpected response from Zotero: ${JSON.stringify(request)}`);
+      }
+      let payload;
+      try {
+        payload = respond(request.command, Array.isArray(request.arguments) ? request.arguments : []);
+      }
+      catch (err) {
+        await postJSON(`${base}/respond`, { error: 'Error', message: String(err.message), stack: String(err.stack) });
+        throw err;
+      }
+      if (request.command === 'Document.complete') break;
+      request = await postJSON(`${base}/respond`, payload);
+    }
   }
   finally {
     done = true;
   }
 
-  async function runIntegration() {
-  let request = await postJSON(`${base}/execCommand`, { command: 'addEditCitation', docId });
-  for (;;) {
-    if (!request || typeof request !== 'object' || !request.command) {
-      throw new Error(`Unexpected response from Zotero: ${JSON.stringify(request)}`);
+  if (noteHTML !== null) {
+    const citations = {};
+    for (const [field, placeholder] of placeholders) {
+      citations[placeholder] = await citesFromField(field);
     }
-    let payload;
-    try {
-      payload = respond(request.command, Array.isArray(request.arguments) ? request.arguments : []);
-    }
-    catch (err) {
-      await postJSON(`${base}/respond`, { error: 'Error', message: String(err.message), stack: String(err.stack) });
-      throw err;
-    }
-    if (request.command === 'Document.complete') break;
-    request = await postJSON(`${base}/respond`, payload);
+    // Images (area annotations, pictures in notes) arrive as inline data and
+    // cannot be carried over; report how many were dropped.
+    let images = 0;
+    const html = noteHTML.replace(/<img\b[^>]*>/gi, () => {
+      images++;
+      return '';
+    });
+    return { cites: [], note: { html, citations, images } };
   }
 
   const cites = [];
-  for (const field of inserted) {
-    if (!field.code.startsWith(ITEM_PREFIX)) continue;
-    const citation = JSON.parse(field.code.slice(ITEM_PREFIX.length));
-    for (const citationItem of citation.citationItems || []) {
-      let item = null;
-      if (Number.isInteger(citationItem.id)) item = Zotero.Items.get(citationItem.id);
-      if (!item && Array.isArray(citationItem.uris)) {
-        for (const uri of citationItem.uris) {
-          item = await Zotero.URI.getURIItem(uri);
-          if (item) break;
-        }
-      }
-      if (!item || !item.isRegularItem()) continue;
-      cites.push({
-        uri: selectURI(item),
-        locator: typeof citationItem.locator === 'string' ? citationItem.locator : '',
-        label: typeof citationItem.label === 'string' ? citationItem.label : 'page',
-        prefix: typeof citationItem.prefix === 'string' ? citationItem.prefix : '',
-        suffix: typeof citationItem.suffix === 'string' ? citationItem.suffix : '',
-        suppressAuthor: !!citationItem['suppress-author'],
-      });
-    }
-  }
-  return cites;
-  }
+  for (const field of inserted) cites.push(...await citesFromField(field));
+  return { cites, note: null };
 }
 
 // ---------------------------------------------------------------- formatting
@@ -319,6 +350,8 @@ async function formatReferences(uris, cites, locale) {
       }
       formattedCites.push({
         uri: cite.uri,
+        // passed through untouched, so callers can tell their cites apart
+        group: typeof cite.group === 'string' ? cite.group : '',
         prefix: cite.prefix || '',
         suffix: cite.suffix || '',
         suppressAuthor: !!cite.suppressAuthor,
@@ -363,6 +396,7 @@ function registerEndpoints() {
     ok: true,
     bridge: bridgeVersion,
     zotero: Zotero.version,
+    notePlaceholderLink: NOTE_PLACEHOLDER_LINK,
     paired: tokenOK(request.searchParams.get('token')),
   }));
 
@@ -397,9 +431,9 @@ function registerEndpoints() {
     }
     pickInProgress = true;
     try {
-      const cites = await pickCitation(request.searchParams.get('locale') || defaultLocale());
+      const picked = await pickCitation(request.searchParams.get('locale') || defaultLocale());
       Zotero.Utilities.Internal.sendToBack();
-      return reply(200, { cites });
+      return reply(200, picked);
     }
     catch (err) {
       if (err && err.message === 'busy') return reply(409, { error: 'busy' });

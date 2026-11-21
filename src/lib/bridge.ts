@@ -27,6 +27,24 @@ export interface PickedCite {
   prefix: string;
   suffix: string;
   suppressAuthor: boolean;
+  /** Free label that `format` passes through; used to tell the citations of a note apart. */
+  group?: string;
+}
+
+/** The content of a Zotero note or of annotations, as picked in the dialog. */
+export interface PickedNote {
+  /** Each citation inside is a link to https://www.zotero.org/?<placeholder>. */
+  html: string;
+  /** Placeholder -> the items of that citation. */
+  citations: Record<string, PickedCite[]>;
+  /** Number of images that could not be carried over. */
+  images: number;
+}
+
+export interface PickResult {
+  /** The picked citation; empty if a note or annotations were picked, or the dialog was cancelled. */
+  cites: PickedCite[];
+  note: PickedNote | null;
 }
 
 export interface FormattedItem {
@@ -40,6 +58,7 @@ export interface FormattedItem {
 
 export interface FormattedCite {
   uri: string;
+  group: string;
   prefix: string;
   suffix: string;
   suppressAuthor: boolean;
@@ -121,13 +140,14 @@ export class Bridge {
     }
   }
 
-  /** Opens Zotero's native citation dialog. Resolves with [] if the user cancels. */
-  async pick(): Promise<PickedCite[]> {
+  /** Opens Zotero's native citation dialog. Resolves with nothing picked if the user cancels. */
+  async pick(): Promise<PickResult> {
     const locale = await this.locale();
     return this.authorized(async (token) => {
       const query = new URLSearchParams({ token });
       if (locale) query.set('locale', locale);
-      return (await this.request<{ cites: PickedCite[] }>(`/pick?${query}`)).cites;
+      const result = await this.request<Partial<PickResult>>(`/pick?${query}`);
+      return { cites: result.cites || [], note: result.note || null };
     });
   }
 

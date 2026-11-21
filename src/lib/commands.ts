@@ -1,5 +1,6 @@
-import type { RNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
-import { Bridge, BridgeError } from './bridge';
+import type { PluginRem, RNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
+import { Bridge, BridgeError, type FormattedCite, type PickedCite } from './bridge';
+import { parseNote, type BlockKind, type NoteBlock } from './note';
 import {
   findDocument,
   getOrCreateDocument,
@@ -35,6 +36,87 @@ function joinSuffix(suffix: string): string {
   return /^[\s,;.:)]/.test(suffix) ? suffix : `, ${suffix}`;
 }
 
+/** "(vgl. [[Müller, 2024]], S. 12; [[Meier, 2023]])", or undefined if none of the cites has an entry. */
+async function citationRichText(
+  cites: FormattedCite[],
+  entries: Map<string, PluginRem>
+): Promise<RichTextInterface | undefined> {
+  const citation: RichTextInterface = ['('];
+  let first = true;
+  for (const cite of cites) {
+    const rem = entries.get(cite.uri);
+    if (!rem) continue;
+    if (!first) citation.push('; ');
+    first = false;
+    if (cite.prefix) citation.push(`${cite.prefix.trimEnd()} `);
+    if (cite.suppressAuthor && cite.yearText) {
+      // An alias lets the reference show just the year while still linking to the entry.
+      const alias = await rem.getOrCreateAliasWithText([cite.yearText]);
+      citation.push({ i: 'q', _id: rem._id, ...(alias ? { aliasId: alias._id } : {}) });
+    } else {
+      citation.push({ i: 'q', _id: rem._id });
+    }
+    if (cite.locatorText) citation.push(cite.locatorText);
+    if (cite.suffix) citation.push(joinSuffix(cite.suffix));
+  }
+  if (first) return undefined;
+  citation.push(')');
+  return citation;
+}
+
+async function styleBlock(rem: PluginRem, kind: BlockKind): Promise<void> {
+  try {
+    if (kind === 'h1') await rem.setFontSize('H1');
+    else if (kind === 'h2') await rem.setFontSize('H2');
+    else if (kind === 'h3') await rem.setFontSize('H3');
+    else if (kind === 'quote') await rem.setIsQuote(true);
+    else if (kind === 'code') await rem.setIsCode(true);
+    else if (kind === 'list') await rem.setIsListItem(true);
+  } catch (err) {
+    // Styling is a nicety; the text is what matters.
+    console.warn('[zotrems]', err);
+  }
+}
+
+/**
+ * Inserts the first block at the cursor and the remaining ones as Rems
+ * following the target – the way pasting several paragraphs behaves.
+ */
+async function insertBlocks(
+  plugin: RNPlugin,
+  targetId: string,
+  blocks: NoteBlock[]
+): Promise<void> {
+  const [first, ...rest] = blocks;
+
+  // Zotero's dialog takes the window focus; if the editor lost its caret,
+  // append to the Rem that was focused when the command started.
+  const focused = await plugin.focus.getFocusedRem();
+  if (focused?._id === targetId) {
+    await plugin.editor.insertRichText(first.text);
+  } else {
+    const current = await plugin.rem.findOne(targetId);
+    if (!current) throw new Error(t('error.targetGone'));
+    const text = current.text || [];
+    await current.setText([...text, ...(text.length ? [' '] : []), ...first.text]);
+  }
+  if (!rest.length) return;
+
+  const target = await plugin.rem.findOne(targetId);
+  if (!target) throw new Error(t('error.targetGone'));
+  const parent = target.parent ? await plugin.rem.findOne(target.parent) : undefined;
+  // Top-level Rems have no siblings we can insert between; use children there.
+  const container = parent || target;
+  let index = parent ? (parent.children || []).indexOf(target._id) + 1 : 0;
+  for (const block of rest) {
+    const rem = await plugin.rem.createRem();
+    if (!rem) throw new Error(t('error.createRem'));
+    await rem.setParent(container, index++);
+    await rem.setText(block.text);
+    await styleBlock(rem, block.kind);
+  }
+}
+
 export function insertCitation(plugin: RNPlugin): Promise<void> {
   return run(plugin, async () => {
     const target = await plugin.focus.getFocusedRem();
@@ -44,52 +126,51 @@ export function insertCitation(plugin: RNPlugin): Promise<void> {
     }
 
     const bridge = new Bridge(plugin);
-    const picked = await bridge.pick();
-    if (!picked.length) return;
+    const { cites, note } = await bridge.pick();
 
-    const doc = await getOrCreateDocument(plugin);
-    const existing = await loadEntries(plugin, doc);
-    const formatted = await bridge.format(
-      existing.map((entry) => entry.uri),
-      picked
-    );
-    const { entries } = await syncEntries(plugin, doc, existing, formatted.items);
+    // The citations inside a note are told apart by their placeholder.
+    const picked: PickedCite[] = note
+      ? Object.entries(note.citations).flatMap(([placeholder, items]) =>
+          items.map((item) => ({ ...item, group: placeholder }))
+        )
+      : cites;
+    if (!note && !picked.length) return;
 
-    const citation: RichTextInterface = ['('];
-    let first = true;
-    for (const cite of formatted.cites) {
-      const rem = entries.get(cite.uri);
-      if (!rem) continue;
-      if (!first) citation.push('; ');
-      first = false;
-      if (cite.prefix) citation.push(`${cite.prefix.trimEnd()} `);
-      if (cite.suppressAuthor && cite.yearText) {
-        // An alias lets the reference show just the year while still linking to the entry.
-        const alias = await rem.getOrCreateAliasWithText([cite.yearText]);
-        citation.push({ i: 'q', _id: rem._id, ...(alias ? { aliasId: alias._id } : {}) });
-      } else {
-        citation.push({ i: 'q', _id: rem._id });
-      }
-      if (cite.locatorText) citation.push(cite.locatorText);
-      if (cite.suffix) citation.push(joinSuffix(cite.suffix));
+    let formatted: FormattedCite[] = [];
+    let entries = new Map<string, PluginRem>();
+    if (picked.length) {
+      const doc = await getOrCreateDocument(plugin);
+      const existing = await loadEntries(plugin, doc);
+      const result = await bridge.format(
+        existing.map((entry) => entry.uri),
+        picked
+      );
+      formatted = result.cites;
+      entries = (await syncEntries(plugin, doc, existing, result.items)).entries;
     }
-    if (first) {
-      await plugin.app.toast(t('toast.nothingCited'));
+
+    let blocks: NoteBlock[];
+    if (note) {
+      const citations = new Map<string, RichTextInterface>();
+      for (const placeholder of Object.keys(note.citations)) {
+        const citation = await citationRichText(
+          formatted.filter((cite) => cite.group === placeholder),
+          entries
+        );
+        if (citation) citations.set(placeholder, citation);
+      }
+      blocks = parseNote(note.html, (placeholder) => citations.get(placeholder));
+    } else {
+      const citation = await citationRichText(formatted, entries);
+      blocks = citation ? [{ kind: 'text', text: citation }] : [];
+    }
+
+    if (!blocks.length) {
+      await plugin.app.toast(t(note ? 'toast.nothingToInsert' : 'toast.nothingCited'));
       return;
     }
-    citation.push(')');
-
-    // Zotero's dialog takes the window focus; if the editor lost its caret,
-    // append to the Rem that was focused when the command started.
-    const focused = await plugin.focus.getFocusedRem();
-    if (focused?._id === target._id) {
-      await plugin.editor.insertRichText(citation);
-    } else {
-      const current = await plugin.rem.findOne(target._id);
-      if (!current) throw new Error(t('error.targetGone'));
-      const text = current.text || [];
-      await current.setText([...text, ...(text.length ? [' '] : []), ...citation]);
-    }
+    await insertBlocks(plugin, target._id, blocks);
+    if (note?.images) await plugin.app.toast(t('toast.imagesSkipped', { count: note.images }));
   });
 }
 
