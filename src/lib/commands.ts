@@ -2,6 +2,7 @@ import type { PluginRem, RNPlugin, RichTextInterface } from '@remnote/plugin-sdk
 import { Bridge, BridgeError, type FormattedCite, type PickedCite } from './bridge';
 import { isAnnotationList, joinBlocks, parseNote, type BlockKind, type NoteBlock } from './note';
 import {
+  citingRems,
   ensureIntro,
   findDocument,
   getOrCreateDocument,
@@ -50,13 +51,9 @@ async function citationRichText(
     if (!first) citation.push('; ');
     first = false;
     if (cite.prefix) citation.push(`${cite.prefix.trimEnd()} `);
-    if (cite.suppressAuthor && cite.yearText) {
-      // An alias lets the reference show just the year while still linking to the entry.
-      const alias = await rem.getOrCreateAliasWithText([cite.yearText]);
-      citation.push({ i: 'q', _id: rem._id, ...(alias ? { aliasId: alias._id } : {}) });
-    } else {
-      citation.push({ i: 'q', _id: rem._id });
-    }
+    // "Omit Author" is not supported: RemNote offers plugins no way to show a
+    // reference under another text, so the full author-year is always used.
+    citation.push({ i: 'q', _id: rem._id });
     if (cite.locatorText) citation.push(cite.locatorText);
     if (cite.suffix) citation.push(joinSuffix(cite.suffix));
   }
@@ -230,10 +227,7 @@ export function refreshBibliography(plugin: RNPlugin): Promise<void> {
 
     const unused = [];
     for (const entry of synced.current) {
-      // References from the entry's own children (such as aliases) do not count as use.
-      const own = new Set((await entry.rem.getDescendants()).map((rem) => rem._id));
-      const references = (await entry.rem.remsReferencingThis()).filter((rem) => !own.has(rem._id));
-      if (!references.length) unused.push(entry);
+      if (!(await citingRems(entry.rem)).length) unused.push(entry);
     }
     const removeUnused = await plugin.settings.getSetting<boolean>('remove-unused');
     if (removeUnused) {

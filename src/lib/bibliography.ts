@@ -304,32 +304,30 @@ async function labelZoteroLink(plugin: RNPlugin, entry: Entry, missing: boolean)
   await writeZoteroLink(plugin, entry.link, entry.uri, label);
 }
 
+/** The Rems that cite an entry: everything referring to it, except its own children. */
+export async function citingRems(entry: PluginRem): Promise<PluginRem[]> {
+  const own = new Set((await entry.getDescendants()).map((rem) => rem._id));
+  return (await entry.remsReferencingThis()).filter((rem) => !own.has(rem._id));
+}
+
 /**
  * Points every reference to `from` at `to` instead. Returns whether no
  * reference to `from` is left afterwards.
  */
 async function moveReferences(from: PluginRem, to: PluginRem): Promise<boolean> {
+  const refersToOld = (element: RichTextInterface[number]) =>
+    typeof element === 'object' && element.i === 'q' && element._id === from._id;
   const swap = (text: RichTextInterface | undefined): RichTextInterface | undefined => {
-    if (
-      !text?.some(
-        (element) => typeof element === 'object' && element.i === 'q' && element._id === from._id
-      )
-    ) {
-      return undefined;
-    }
-    return text.map((element) => {
-      if (typeof element !== 'object' || element.i !== 'q' || element._id !== from._id)
-        return element;
-      // An alias belongs to the old entry and cannot be carried over.
-      const { aliasId: _aliasId, ...rest } = element;
-      return { ...rest, _id: to._id };
-    });
+    if (!text?.some(refersToOld)) return undefined;
+    return text.map((element) =>
+      typeof element === 'object' && element.i === 'q' && element._id === from._id
+        ? { ...element, _id: to._id }
+        : element
+    );
   };
 
-  const own = new Set((await from.getDescendants()).map((rem) => rem._id));
   let complete = true;
-  for (const reference of await from.remsReferencingThis()) {
-    if (own.has(reference._id)) continue;
+  for (const reference of await citingRems(from)) {
     const text = swap(reference.text);
     const backText = swap(reference.backText);
     if (text) await reference.setText(text);
