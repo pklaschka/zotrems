@@ -58,8 +58,9 @@ Both plugins share one version number and are meant to be used in matching versi
 ## ✍️ Citing
 
 Place the cursor where the citation should go and run **Zotero: Insert Citation**: type
-`/zcite`, press `Alt+Shift+Z`, or pick it from the Omnibar. Zotero's dialog opens; what you
-choose there decides what is inserted.
+`/zcite`, press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd>
+(<kbd>⌥ Option</kbd>+<kbd>⇧ Shift</kbd>+<kbd>Z</kbd> on macOS), or pick it from the Omnibar.
+Zotero's dialog opens; what you choose there decides what is inserted.
 
 | You pick | You get |
 | --- | --- |
