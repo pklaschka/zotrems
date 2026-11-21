@@ -1,6 +1,5 @@
 name: Feature request
 description: Suggest something Zotrems should do, or do differently
-labels: [enhancement]
 type: feature
 body:
   - type: textarea
