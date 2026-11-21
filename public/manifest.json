@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 1,
+  "id": "zotrems",
+  "name": "Zotrems – Zotero-Zitate",
+  "author": "zklaschka",
+  "repoUrl": "https://github.com/pklaschka/zotrems",
+  "version": {
+    "major": 0,
+    "minor": 1,
+    "patch": 0
+  },
+  "theme": [],
+  "enableOnMobile": false,
+  "description": "Zitate über den nativen Zotero-Dialog einfügen; die Quellen landen als Concepts in einem Literaturverzeichnis-Dokument.",
+  "requestNative": false,
+  "requiredScopes": [
+    {
+      "type": "All",
+      "level": "ReadCreateModifyDelete"
+    }
+  ]
+}
