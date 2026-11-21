@@ -15,6 +15,15 @@ Pick sources in Zotero's own citation dialog, and Zotrems inserts an APA citatio
 cursor. Every cited source is listed exactly once in a bibliography document, and all
 citations link to it.
 
+- 🔎 **The dialog you know**: search, page numbers, prefix and suffix work as in Word or
+  Google Docs.
+- 🗂️ **One bibliography**: sources are formatted by Zotero itself in APA 7 and kept in sync with
+  your library.
+- 🖍️ **Annotations and notes**: quotes from your PDFs arrive with their citation and page.
+- 🌍 **English and German** interface.
+
+## 👀 What it looks like
+
 **In your notes**, a citation is a link to the source's bibliography entry:
 
 > Spacing out reviews improves retention (cf. [Müller, 2024](#-the-bibliography), p. 12).
@@ -24,13 +33,6 @@ and a link back to Zotero below it:
 
 > **Müller, 2024** ↔ Müller, S. (2024). *Lernen mit Karteikarten*. Beltz.<br>
 > &nbsp;&nbsp;&nbsp;&nbsp;↳ [Open in Zotero](#-the-bibliography)
-
-- 🔎 **The dialog you know**: search, page numbers, prefix and suffix work as in Word or
-  Google Docs.
-- 🗂️ **One bibliography**: sources are formatted by Zotero itself in APA 7 and kept in sync with
-  your library.
-- 🖍️ **Annotations and notes**: quotes from your PDFs arrive with their citation and page.
-- 🌍 **English and German** interface.
 
 ## 🧰 What you need
 
