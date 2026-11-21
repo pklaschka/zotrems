@@ -26,7 +26,7 @@ environments, so a RemNote plugin cannot talk to Zotero (or Better BibTeX) direc
 
 1. **Zotero** (version 7 or later): run `npm run build:zotero`, then in Zotero choose
    *Tools → Plugins → gear icon → Install Plugin From File* and select `zotrems-bridge.xpi`.
-2. **RemNote**: run `npm install`, then either
+2. **RemNote** (needs Node 22 and the `zip` command): run `npm install`, then either
    - `npm run dev` and enter `http://localhost:8080` in RemNote under *Settings → Plugins →
      Build → Develop from localhost*, or
    - `npm run build` and upload `PluginZip.zip`.
@@ -69,6 +69,23 @@ set in the plugin settings (takes effect after reloading the plugin).
 - The bridge serves four endpoints under `http://127.0.0.1:23119/zotrems/` (`ping`, `pair`,
   `pick`, `format`). All except `ping` and `pair` require the token that is handed out when
   pairing, after you confirm in Zotero.
+
+## Releasing
+
+Both plugins share one version; `package.json` is the source of truth. To publish a release,
+run the **Release** workflow from the repository's *Actions* tab and enter `patch`, `minor`,
+`major` or an explicit version such as `1.2.3`. The workflow then
+
+1. sets that version in `package.json`, `public/manifest.json` and
+   `zotero-bridge/manifest.json`,
+2. type-checks and builds both plugins,
+3. commits the version as `Release X.Y.Z`, tags it `vX.Y.Z` and pushes both,
+4. publishes a GitHub release with `zotrems-remnote-plugin.zip`, `zotrems-bridge.xpi` and
+   `updates.json` attached.
+
+Zotero reads `updates.json` from the latest release, so an installed Zotrems Bridge updates
+itself. Locally, `npm run version:sync` writes the version from `package.json` into both
+manifests, and `npm run version:check` verifies that they agree.
 
 ## How this was built
 

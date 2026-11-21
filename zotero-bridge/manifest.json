@@ -6,7 +6,7 @@
   "applications": {
     "zotero": {
       "id": "zotrems-bridge@zotrems.local",
-      "update_url": "https://zotrems.invalid/updates.json",
+      "update_url": "https://github.com/pklaschka/zotrems/releases/latest/download/updates.json",
       "strict_min_version": "7.0",
       "strict_max_version": "11.*"
     }

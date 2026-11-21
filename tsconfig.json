@@ -2,20 +2,13 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",
-    "jsx": "react-jsx",
+    "lib": ["esnext", "dom", "dom.iterable"],
     "moduleResolution": "node",
     "strict": true,
-    "strictNullChecks": true,
     "noEmit": true,
-    "allowJs": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "esModuleInterop": true
-  },
-  "ts-node": {
-    "compilerOptions": {
-      "module": "CommonJS"
-    }
   },
   "include": ["src"]
 }

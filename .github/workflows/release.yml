@@ -1,0 +1,92 @@
+name: Release
+
+# Run manually from the Actions tab ("Run workflow"). It sets one version for
+# both plugins, builds them, commits and tags the version, and publishes a
+# GitHub release with the built plugins attached.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'patch, minor or major – or an explicit version such as 1.2.3'
+        required: true
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only release from the default branch
+        if: github.ref_name != github.event.repository.default_branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          echo "::error::Releases must be run from $DEFAULT_BRANCH."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Set the version of both plugins
+        id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          npm version "$REQUESTED" --no-git-tag-version
+          npm run version:sync
+          version="$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "::error::Version $version has already been released."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check types
+        run: npm run check-types
+
+      - name: Build the RemNote plugin
+        run: |
+          npm run build
+          cp PluginZip.zip zotrems-remnote-plugin.zip
+
+      - name: Build the Zotero plugin
+        run: |
+          npm run build:zotero
+          node scripts/sync-version.mjs --updates-json > updates.json
+
+      - name: Commit and tag the version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json public/manifest.json zotero-bridge/manifest.json
+          git commit -m "Release $VERSION"
+          git tag "v$VERSION"
+          git push origin "HEAD:$BRANCH" "v$VERSION"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+            --title "Zotrems $VERSION" \
+            --generate-notes \
+            zotrems-remnote-plugin.zip \
+            zotrems-bridge.xpi \
+            updates.json
