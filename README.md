@@ -69,3 +69,10 @@ set in the plugin settings (takes effect after reloading the plugin).
 - The bridge serves four endpoints under `http://127.0.0.1:23119/zotrems/` (`ping`, `pair`,
   `pick`, `format`). All except `ping` and `pair` require the token that is handed out when
   pairing, after you confirm in Zotero.
+
+## How this was built
+
+Zotrems was developed with the help of [Claude](https://claude.com/claude-code), Anthropic's
+AI model, which wrote most of the code. I'm an experienced software engineer: the concept and
+the design decisions are mine, I direct and review the work, and I take responsibility for
+what is published here. If something doesn't work, please open an issue.
