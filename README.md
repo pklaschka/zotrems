@@ -134,7 +134,7 @@ The repository holds both plugins:
 
 ### Building
 
-Needs Node 22 and the `zip` command.
+Needs Node 26 and the `zip` command.
 
 - `npm install` once.
 - `npm run dev` serves the RemNote plugin: enter `http://localhost:8080` in RemNote under
