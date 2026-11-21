@@ -71,8 +71,10 @@ export interface FormattedCite {
 export interface FormatResult {
   items: Record<string, FormattedItem>;
   cites: FormattedCite[];
-  /** URIs that no longer resolve to an item in Zotero. */
+  /** URIs that no longer resolve to an item in Zotero (deleted or in the trash). */
   missing: string[];
+  /** Requested URI -> current URI, for items that were merged into another item in Zotero. */
+  replaced: Record<string, string>;
 }
 
 export class Bridge {
@@ -154,12 +156,19 @@ export class Bridge {
   /** APA texts for all `uris` (and the items of `cites`), formatted as one bibliography. */
   async format(uris: string[], cites: PickedCite[] = []): Promise<FormatResult> {
     const locale = await this.locale();
-    return this.authorized((token) =>
-      this.request<FormatResult>('/format', {
+    const result = await this.authorized((token) =>
+      this.request<Partial<FormatResult>>('/format', {
         method: 'POST',
         // URI-encoded so that the body is plain ASCII
         body: encodeURIComponent(JSON.stringify({ token, locale, uris, cites })),
       })
     );
+    // An older Zotrems Bridge does not send every field.
+    return {
+      items: result.items || {},
+      cites: (result.cites || []).map((cite) => ({ ...cite, group: cite.group || '' })),
+      missing: result.missing || [],
+      replaced: result.replaced || {},
+    };
   }
 }

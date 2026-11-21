@@ -40,7 +40,7 @@ async function onActivate(plugin: ReactRNPlugin) {
     id: 'remove-unused',
     title: t('setting.removeUnused.title'),
     description: t('setting.removeUnused.description'),
-    defaultValue: false,
+    defaultValue: true,
   });
 
   await plugin.settings.registerNumberSetting({

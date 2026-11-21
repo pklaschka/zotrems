@@ -54,13 +54,15 @@ Zotero has to be running.
   become one citation: `(Meier et al., 2023; Müller, 2024, p. 12)`.
   The dialog also offers annotations and notes. Picking **annotations** inserts each quote
   (and comment) followed by its citation with the page, e.g.
-  `“Spacing works.” (Müller, 2024, p. 5)`. Picking a **note** inserts the note's text, with the
-  citations inside it turned into linked citations. In both cases the first paragraph goes
-  to the cursor and further paragraphs become the Rems that follow; headings, lists, quotes
-  and code keep their formatting. Images cannot be carried over.
+  `“Spacing works.” (Müller, 2024, p. 5)`; the first goes to the cursor, further ones become
+  the Rems that follow. Picking a **note** inserts it as one quote Rem below the Rem with the
+  cursor (or into that Rem if it is still empty), one line per paragraph, with the citations
+  inside the note turned into linked citations. Images cannot be carried over.
 - **Zotero: Refresh Bibliography** – brings all entries in line with Zotero (changed
-  metadata, `2024a`/`2024b`), removes empty Rems from the bibliography and reports entries
-  without references.
+  metadata, `2024a`/`2024b`), removes empty Rems and entries that are no longer cited anywhere.
+  Entries whose item was **deleted in Zotero** are kept, because they may still be cited; their
+  link is relabelled "Not found in Zotero" and recovers if the item is restored from the trash.
+  Entries of items that were **merged** in Zotero follow the surviving item.
 - **Zotero: Connect** – pairs RemNote with Zotero again.
 
 The interface is available in English and German. It follows the system language and can be
@@ -73,11 +75,13 @@ set in the plugin settings (takes effect after reloading the plugin).
 | Language | Automatic | interface language: Automatic, Deutsch or English |
 | Name of the bibliography document | Zotero Bibliography | "Zotero-Literaturverzeichnis" in German |
 | Citation language | None (Zotero's language) | or German / English; decides e.g. "p." vs. "S." |
-| Remove unused entries when refreshing | off | deletes entries no Rem refers to any more |
+| Remove unused entries when refreshing | on | deletes entries no Rem refers to any more; turn off to only have them reported |
 | Zotero port | 23119 | only change it if the port was changed in Zotero |
 
 ## How it works
 
+- The bibliography document starts with a quote Rem explaining how it works. You can reword
+  it; if you delete it, it comes back.
 - The link between a Rem and its Zotero item lives only in the deep link of the
   "Extra Card Detail" Rem. An entry's name and back side may change; the link must stay.
 - Formatting is done by Zotero's own citation processor with the *APA 7* style. All entries

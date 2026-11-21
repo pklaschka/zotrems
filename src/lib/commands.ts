@@ -1,7 +1,8 @@
 import type { PluginRem, RNPlugin, RichTextInterface } from '@remnote/plugin-sdk';
 import { Bridge, BridgeError, type FormattedCite, type PickedCite } from './bridge';
-import { parseNote, type BlockKind, type NoteBlock } from './note';
+import { isAnnotationList, joinBlocks, parseNote, type BlockKind, type NoteBlock } from './note';
 import {
+  ensureIntro,
   findDocument,
   getOrCreateDocument,
   loadEntries,
@@ -117,6 +118,36 @@ async function insertBlocks(
   }
 }
 
+function isBlank(text: RichTextInterface | undefined): boolean {
+  return !text || text.every((element) => typeof element === 'string' && !element.trim());
+}
+
+/**
+ * Inserts a whole note as one quote Rem: into the target if that is still
+ * empty, otherwise into a new Rem right after it.
+ */
+async function insertQuote(
+  plugin: RNPlugin,
+  targetId: string,
+  text: RichTextInterface
+): Promise<void> {
+  const target = await plugin.rem.findOne(targetId);
+  if (!target) throw new Error(t('error.targetGone'));
+
+  let quote = target;
+  if (!isBlank(target.text) || target.children?.length) {
+    const created = await plugin.rem.createRem();
+    if (!created) throw new Error(t('error.createRem'));
+    const parent = target.parent ? await plugin.rem.findOne(target.parent) : undefined;
+    // Top-level Rems have no siblings we can insert between; use a child there.
+    if (parent) await created.setParent(parent, (parent.children || []).indexOf(target._id) + 1);
+    else await created.setParent(target, 0);
+    quote = created;
+  }
+  await quote.setText(text);
+  await quote.setIsQuote(true);
+}
+
 export function insertCitation(plugin: RNPlugin): Promise<void> {
   return run(plugin, async () => {
     const target = await plugin.focus.getFocusedRem();
@@ -140,13 +171,14 @@ export function insertCitation(plugin: RNPlugin): Promise<void> {
     let entries = new Map<string, PluginRem>();
     if (picked.length) {
       const doc = await getOrCreateDocument(plugin);
+      await ensureIntro(plugin, doc);
       const existing = await loadEntries(plugin, doc);
       const result = await bridge.format(
         existing.map((entry) => entry.uri),
         picked
       );
       formatted = result.cites;
-      entries = (await syncEntries(plugin, doc, existing, result.items)).entries;
+      entries = (await syncEntries(plugin, doc, existing, result)).entries;
     }
 
     let blocks: NoteBlock[];
@@ -169,7 +201,13 @@ export function insertCitation(plugin: RNPlugin): Promise<void> {
       await plugin.app.toast(t(note ? 'toast.nothingToInsert' : 'toast.nothingCited'));
       return;
     }
-    await insertBlocks(plugin, target._id, blocks);
+    // Annotations read as quotes within the running text; a note is a text of
+    // its own and goes into one quote Rem.
+    if (note && !isAnnotationList(note.html)) {
+      await insertQuote(plugin, target._id, joinBlocks(blocks));
+    } else {
+      await insertBlocks(plugin, target._id, blocks);
+    }
     if (note?.images) await plugin.app.toast(t('toast.imagesSkipped', { count: note.images }));
   });
 }
@@ -178,6 +216,7 @@ export function refreshBibliography(plugin: RNPlugin): Promise<void> {
   return run(plugin, async () => {
     const doc = await findDocument(plugin);
     const empty = doc ? await removeEmptyRems(doc) : 0;
+    if (doc) await ensureIntro(plugin, doc);
     const existing = doc ? await loadEntries(plugin, doc) : [];
     if (!doc || !existing.length) {
       await plugin.app.toast(
@@ -187,11 +226,14 @@ export function refreshBibliography(plugin: RNPlugin): Promise<void> {
     }
 
     const formatted = await new Bridge(plugin).format(existing.map((entry) => entry.uri));
-    const { updated } = await syncEntries(plugin, doc, existing, formatted.items);
+    const synced = await syncEntries(plugin, doc, existing, formatted);
 
     const unused = [];
-    for (const entry of existing) {
-      if (!(await entry.rem.remsReferencingThis()).length) unused.push(entry);
+    for (const entry of synced.current) {
+      // References from the entry's own children (such as aliases) do not count as use.
+      const own = new Set((await entry.rem.getDescendants()).map((rem) => rem._id));
+      const references = (await entry.rem.remsReferencingThis()).filter((rem) => !own.has(rem._id));
+      if (!references.length) unused.push(entry);
     }
     const removeUnused = await plugin.settings.getSetting<boolean>('remove-unused');
     if (removeUnused) {
@@ -200,7 +242,7 @@ export function refreshBibliography(plugin: RNPlugin): Promise<void> {
 
     const parts = [
       t('refresh.checked', { count: existing.length }),
-      t('refresh.updated', { count: updated }),
+      t('refresh.updated', { count: synced.updated }),
     ];
     if (unused.length) {
       parts.push(
@@ -208,8 +250,8 @@ export function refreshBibliography(plugin: RNPlugin): Promise<void> {
       );
     }
     if (empty) parts.push(t('refresh.emptyRemoved', { count: empty }));
-    if (formatted.missing.length)
-      parts.push(t('refresh.missing', { count: formatted.missing.length }));
+    if (synced.relinked) parts.push(t('refresh.relinked', { count: synced.relinked }));
+    if (synced.missing) parts.push(t('refresh.missing', { count: synced.missing }));
     await plugin.app.toast(t('toast.refreshed', { parts: parts.join(', ') }));
   });
 }

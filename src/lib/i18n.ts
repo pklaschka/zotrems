@@ -22,7 +22,10 @@ const de = {
   'command.connect.name': 'Zotero: Verbindung herstellen',
   'command.connect.description': 'Koppelt RemNote (erneut) mit Zotero.',
 
+  'intro.text':
+    'Dieses Literaturverzeichnis wird vom Plugin Zotrems gepflegt. Jede Quelle, die mit »Zotero: Zitat einfügen« zitiert wird, erhält hier genau einen Eintrag, auf den alle Zitate verweisen. Die Einträge werden bei jedem Zitieren und mit »Zotero: Literaturverzeichnis aktualisieren« aus Zotero neu geschrieben; eigene Änderungen daran gehen dabei verloren. Der Zotero-Link unter jedem Eintrag ordnet ihn seinem Zotero-Eintrag zu und darf nicht entfernt werden.',
   'link.label': 'In Zotero öffnen',
+  'link.missing': 'Nicht in Zotero gefunden',
 
   'toast.busy': 'Zotrems arbeitet noch …',
   'toast.noFocus': 'Bitte zuerst den Cursor an die Stelle setzen, an der zitiert werden soll.',
@@ -40,7 +43,8 @@ const de = {
   'refresh.unusedRemoved': '{count} unbenutzte entfernt',
   'refresh.unused': '{count} ohne Verweis',
   'refresh.emptyRemoved': '{count} leere Rems entfernt',
-  'refresh.missing': '{count} nicht mehr in Zotero',
+  'refresh.missing': '{count} nicht in Zotero gefunden (behalten und markiert)',
+  'refresh.relinked': '{count} nach Zusammenführung in Zotero neu verknüpft',
 
   'error.offline':
     'Zotero ist nicht erreichbar. Läuft Zotero, und ist das Plugin »Zotrems Bridge« installiert?',
@@ -81,7 +85,10 @@ const en: Record<Key, string> = {
   'command.connect.name': 'Zotero: Connect',
   'command.connect.description': 'Pairs RemNote with Zotero (again).',
 
+  'intro.text':
+    'This bibliography is maintained by the Zotrems plugin. Every source cited with “Zotero: Insert Citation” gets exactly one entry here, and all citations link to it. The entries are rewritten from Zotero whenever you cite and when you run “Zotero: Refresh Bibliography”, so your own changes to them are lost. The Zotero link below each entry ties it to its Zotero item and must not be removed.',
   'link.label': 'Open in Zotero',
+  'link.missing': 'Not found in Zotero',
 
   'toast.busy': 'Zotrems is still working …',
   'toast.noFocus': 'Place the cursor where the citation should go first.',
@@ -98,7 +105,8 @@ const en: Record<Key, string> = {
   'refresh.unusedRemoved': '{count} unused removed',
   'refresh.unused': '{count} without references',
   'refresh.emptyRemoved': '{count} empty Rems removed',
-  'refresh.missing': '{count} no longer in Zotero',
+  'refresh.missing': '{count} not found in Zotero (kept and marked)',
+  'refresh.relinked': '{count} re-linked after a merge in Zotero',
 
   'error.offline':
     'Cannot reach Zotero. Is Zotero running, and is the “Zotrems Bridge” plugin installed?',
@@ -135,6 +143,9 @@ export function t(key: Key, params: Record<string, string | number> = {}): strin
 }
 
 /** The default document names of all languages, so a language switch still finds the document. */
+/** The introduction texts of all languages, to recognise an introduction written in another language. */
+export const INTRO_TEXTS = Object.values(languages).map((messages) => messages['intro.text']);
+
 export const DEFAULT_DOCUMENT_NAMES = Object.values(languages).map(
   (messages) => messages['setting.document.default']
 );

@@ -63,16 +63,32 @@ function selectURI(item) {
   return `zotero://select/library/items/${item.key}`;
 }
 
-function itemFromSelectURI(uri) {
+// Resolves to the item behind a zotero://select link, or null if it no longer
+// exists (deleted, in the trash, or not a regular item).
+async function itemFromSelectURI(uri) {
   const m = /^zotero:\/\/select\/(library|groups\/(\d+))\/items\/([A-Z0-9]+)$/.exec(String(uri));
   if (!m) return null;
   const libraryID = m[2]
     ? Zotero.Groups.getLibraryIDFromGroupID(Number(m[2]))
     : Zotero.Libraries.userLibraryID;
   if (!libraryID) return null;
-  const item = Zotero.Items.getByLibraryAndKey(libraryID, m[3]);
-  if (!item || item.deleted || !item.isRegularItem()) return null;
-  return item;
+  const usable = (item) => item && !item.deleted && item.isRegularItem();
+  let item = Zotero.Items.getByLibraryAndKey(libraryID, m[3]);
+  if (usable(item)) return item;
+
+  // The item is gone. If it was merged into another item, Zotero remembers
+  // which one replaced it; follow that (merges can be chained).
+  let itemURI = `${Zotero.URI.getLibraryURI(libraryID)}/items/${m[3]}`;
+  for (let i = 0; i < 10; i++) {
+    const replacers = await Zotero.Relations.getByPredicateAndObject(
+      'item', Zotero.Relations.replacedItemPredicate, itemURI
+    );
+    if (!replacers.length) return null;
+    item = replacers[0];
+    if (usable(item)) return item;
+    itemURI = Zotero.URI.getItemURI(item);
+  }
+  return null;
 }
 
 // "(Müller, 2024)" -> "Müller, 2024"
@@ -190,9 +206,9 @@ async function pickCitation(locale) {
   const placeholders = new Map(); // field -> placeholder ID
   let noteHTML = null;
 
+  // `fields` mirrors the document: Zotero addresses fields by their position in it.
   const newField = () => {
     const field = { id: String(inserted.length), code: '', text: '{Placeholder}', noteIndex: 0, adjacent: false };
-    fields.push(field);
     inserted.push(field);
     return field;
   };
@@ -214,15 +230,25 @@ async function pickCitation(locale) {
       case 'Document.cursorInField': return null;
       case 'Document.getDocumentData': return documentData;
       case 'Document.setDocumentData': documentData = String(a[0] || ''); return null;
-      case 'Document.insertField': return newField();
+      case 'Document.insertField': {
+        const field = newField();
+        fields.push(field);
+        return field;
+      }
       case 'Document.getFields': return fields;
       case 'Document.convert': return null;
       case 'Document.convertPlaceholdersToFields':
-        return (Array.isArray(a[0]) ? a[0] : []).map((placeholder) => {
+      {
+        const created = (Array.isArray(a[0]) ? a[0] : []).map((placeholder) => {
           const field = newField();
           placeholders.set(field, String(placeholder));
           return field;
         });
+        // Zotero passes the placeholders last-to-first, but expects the
+        // document's fields first-to-last when it assigns the citations.
+        fields.push(...[...created].reverse());
+        return created;
+      }
       case 'Document.insertText': noteHTML = (noteHTML || '') + String(a[0] || ''); return null;
       case 'Document.setBibliographyStyle': return null;
       case 'Document.complete': return null;
@@ -273,9 +299,10 @@ async function pickCitation(locale) {
     // Images (area annotations, pictures in notes) arrive as inline data and
     // cannot be carried over; report how many were dropped.
     let images = 0;
-    const html = noteHTML.replace(/<img\b[^>]*>/gi, () => {
+    const html = noteHTML.replace(/<img\b[^>]*>/gi, (tag) => {
       images++;
-      return '';
+      // Keep the marker that tells an area annotation apart from a note.
+      return /\sdata-annotation=/.test(tag) ? '<span data-annotation=""></span>' : '';
     });
     return { cites: [], note: { html, citations, images } };
   }
@@ -293,19 +320,25 @@ async function formatReferences(uris, cites, locale) {
 
   const byURI = new Map();
   const missing = [];
+  const replaced = {}; // requested link -> current link
   for (const uri of new Set([...uris, ...cites.map((cite) => cite.uri)])) {
-    const item = itemFromSelectURI(uri);
-    if (item) byURI.set(uri, item);
-    else missing.push(uri);
+    const item = await itemFromSelectURI(uri);
+    if (!item) {
+      missing.push(uri);
+      continue;
+    }
+    byURI.set(uri, item);
+    // After a merge in Zotero the item lives under another link.
+    if (selectURI(item) !== uri) replaced[uri] = selectURI(item);
   }
 
   const items = {};
   const formattedCites = [];
-  if (!byURI.size) return { items, cites: formattedCites, missing };
+  if (!byURI.size) return { items, cites: formattedCites, missing, replaced };
 
   // All items go into one engine so that year suffixes (2024a/2024b) are
   // consistent between in-text citations and the bibliography.
-  const ids = [...byURI.values()].map((item) => item.id);
+  const ids = [...new Set([...byURI.values()].map((item) => item.id))];
   // makeCitationCluster (unlike previewCitationCluster) keeps the registry's
   // year-suffix disambiguation.
   const preview = (engine, citationItem) => stripParens(engine.makeCitationCluster([citationItem]));
@@ -329,9 +362,10 @@ async function formatReferences(uris, cites, locale) {
   const textEngine = Zotero.Styles.get(APA).getCiteProc(locale, 'text');
   try {
     textEngine.updateItems(ids);
-    for (const [uri, item] of byURI) {
+    for (const item of byURI.values()) {
       const bib = bibliography.get(item.id) || { html: '', order: 0 };
-      items[uri] = {
+      // keyed by the item's current link; see `replaced` for requested links that differ
+      items[selectURI(item)] = {
         inText: preview(textEngine, { id: item.id }),
         bibliographyHTML: bib.html,
         order: bib.order,
@@ -349,7 +383,7 @@ async function formatReferences(uris, cites, locale) {
         locatorText = withLocator.startsWith(plain) ? withLocator.slice(plain.length) : `, ${cite.locator}`;
       }
       formattedCites.push({
-        uri: cite.uri,
+        uri: selectURI(item),
         // passed through untouched, so callers can tell their cites apart
         group: typeof cite.group === 'string' ? cite.group : '',
         prefix: cite.prefix || '',
@@ -365,7 +399,7 @@ async function formatReferences(uris, cites, locale) {
     textEngine.free();
   }
 
-  return { items, cites: formattedCites, missing };
+  return { items, cites: formattedCites, missing, replaced };
 }
 
 // ---------------------------------------------------------------- endpoints

@@ -157,3 +157,44 @@ export function parseNote(
   flush();
   return blocks;
 }
+
+/**
+ * Whether the HTML is what Zotero generates for picked annotations (every
+ * paragraph is an annotation) rather than a note someone wrote.
+ */
+export function isAnnotationList(html: string): boolean {
+  const body = new DOMParser().parseFromString(html, 'text/html').body;
+  // Zotero wraps the content in a single <div data-schema-version>.
+  const wrapper =
+    body.children.length === 1 && body.children[0].tagName === 'DIV' ? body.children[0] : body;
+  const paragraphs = Array.from(wrapper.children).filter(
+    (element) => element.textContent?.trim() || element.querySelector('img')
+  );
+  return (
+    paragraphs.length > 0 &&
+    paragraphs.every(
+      (element) =>
+        element.matches('[data-annotation]') || element.querySelector('[data-annotation]')
+    )
+  );
+}
+
+/** Joins blocks into the text of a single Rem, one line per block. */
+export function joinBlocks(blocks: NoteBlock[]): RichTextInterface {
+  const out: RichTextInterface = [];
+  blocks.forEach((block, index) => {
+    if (index) out.push('\n');
+    if (block.kind === 'list') out.push('• ');
+    if (block.kind === 'h1' || block.kind === 'h2' || block.kind === 'h3') {
+      // A heading inside a single Rem can only be set apart by weight.
+      for (const element of block.text) {
+        if (typeof element === 'string') out.push({ i: 'm', text: element, b: true });
+        else if (element.i === 'm') out.push({ ...element, b: true });
+        else out.push(element);
+      }
+    } else {
+      out.push(...block.text);
+    }
+  });
+  return out;
+}
