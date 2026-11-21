@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest something Zotrems should do, or do differently
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation in which Zotrems falls short today. A concrete example helps more than a general wish.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should Zotrems do?
+      description: How you imagine it working – in RemNote, in Zotero's dialog, or in the bibliography.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you work around it today?
+      description: Anything you do instead, or other tools that already solve it.
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Screenshots, examples from other citation tools, or links.

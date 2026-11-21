@@ -1,0 +1,74 @@
+name: Bug report
+description: Something in Zotrems does not work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. Before you start, please make sure the RemNote plugin and the Zotrems Bridge in Zotero are on the same version – a mismatch explains many problems.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you do right before? If it matters, say what you picked in Zotero's dialog (a source, several sources, annotations, a note).
+      placeholder: |
+        1. Put the cursor in a Rem
+        2. Run "Zotero: Insert Citation"
+        3. Pick …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it go wrong?
+      options:
+        - Inserting a citation
+        - Annotations or notes
+        - The bibliography document
+        - Refreshing the bibliography
+        - Connecting to Zotero
+        - Installation or updates
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: zotrems-version
+    attributes:
+      label: Zotrems version
+      description: RemNote → Settings → Plugins. Please also check that Zotrems Bridge in Zotero (Tools → Plugins) shows the same version.
+      placeholder: 0.2.1
+    validations:
+      required: true
+  - type: input
+    id: zotero-version
+    attributes:
+      label: Zotero version
+      placeholder: "7.0.11"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: RemNote and operating system
+      placeholder: RemNote desktop 1.19 on macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Messages from Zotrems
+      description: |
+        The text of any message RemNote showed, and any lines containing `[zotrems]` from RemNote's developer console (press Cmd+Option+I or Ctrl+Shift+I, open the Console tab and filter for `zotrems`).
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Screenshots, or details about the source involved (item type, whether it is in a group library, …).

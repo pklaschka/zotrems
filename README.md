@@ -15,13 +15,15 @@ Pick sources in Zotero's own citation dialog, and Zotrems inserts an APA citatio
 cursor. Every cited source is listed exactly once in a bibliography document, and all
 citations link to it.
 
-```
-In your notes:        … (cf. [[Müller, 2024]], p. 12)
+**In your notes**, a citation is a link to the source's bibliography entry:
 
-Zotero Bibliography
-  Müller, 2024 :: Müller, S. (2024). Lernen mit Karteikarten. Beltz.     ← concept, practice disabled
-      Open in Zotero (zotero://select/library/items/…)                    ← Extra Card Detail
-```
+> Spacing out reviews improves retention (cf. [Müller, 2024](#-the-bibliography), p. 12).
+
+**In the bibliography document**, each cited source is one concept with practice disabled,
+and a link back to Zotero below it:
+
+> **Müller, 2024** ↔ Müller, S. (2024). *Lernen mit Karteikarten*. Beltz.<br>
+> &nbsp;&nbsp;&nbsp;&nbsp;↳ [Open in Zotero](#-the-bibliography)
 
 - 🔎 **The dialog you know**: search, page numbers, prefix and suffix work as in Word or
   Google Docs.
